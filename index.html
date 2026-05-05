@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Match-3 Grid (8x8)</title>
+  <style>
+    :root {
+      --board-size: 8;
+      --cell-size: 56px;
+      --gap-size: 6px;
+      --board-bg: #1f2937;
+      --page-bg: #0f172a;
+      --text-color: #e5e7eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--page-bg);
+      color: var(--text-color);
+      font-family: Arial, sans-serif;
+    }
+
+    .wrapper {
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.4rem;
+    }
+
+    p {
+      margin: 0 0 16px;
+      opacity: 0.85;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(var(--board-size), var(--cell-size));
+      grid-template-rows: repeat(var(--board-size), var(--cell-size));
+      gap: var(--gap-size);
+      padding: 12px;
+      background: var(--board-bg);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .tile {
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <main class="wrapper">
+    <h1>Match-3 Demo Grid</h1>
+    <p>Simple 8x8 board with colored squares.</p>
+    <section id="board" class="board" aria-label="8 by 8 match-3 board"></section>
+  </main>
+
+  <script>
+    // Board settings.
+    const BOARD_SIZE = 8;
+
+    // A small color palette representing different gem types.
+    const COLORS = [
+      '#ef4444', // red
+      '#f59e0b', // amber
+      '#10b981', // green
+      '#3b82f6', // blue
+      '#8b5cf6', // purple
+      '#ec4899'  // pink
+    ];
+
+    const board = document.getElementById('board');
+
+    // Build an 8x8 grid using random colors.
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const tile = document.createElement('div');
+        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+        tile.className = 'tile';
+        tile.style.backgroundColor = color;
+        tile.setAttribute('data-row', row);
+        tile.setAttribute('data-col', col);
+
+        board.appendChild(tile);
+      }
+    }
+  </script>
+</body>
+</html>
