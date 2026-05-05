@@ -12,6 +12,7 @@
       --board-bg: #1f2937;
       --page-bg: #0f172a;
       --text-color: #e5e7eb;
+      --highlight-color: #f8fafc;
     }
 
     * {
@@ -57,6 +58,18 @@
     .tile {
       border-radius: 8px;
       border: 2px solid rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .tile:hover {
+      transform: scale(1.03);
+    }
+
+    .tile.selected {
+      border-color: var(--highlight-color);
+      transform: scale(1.08);
+      box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.3);
     }
   </style>
 </head>
@@ -82,6 +95,7 @@
     ];
 
     const board = document.getElementById('board');
+    let selectedTile = null;
 
     // Build an 8x8 grid using random colors.
     for (let row = 0; row < BOARD_SIZE; row++) {
@@ -97,6 +111,22 @@
         board.appendChild(tile);
       }
     }
+
+    // Handle tile selection so only one tile is highlighted at a time.
+    board.addEventListener('click', (event) => {
+      const clickedTile = event.target.closest('.tile');
+
+      if (!clickedTile || !board.contains(clickedTile)) {
+        return;
+      }
+
+      if (selectedTile) {
+        selectedTile.classList.remove('selected');
+      }
+
+      clickedTile.classList.add('selected');
+      selectedTile = clickedTile;
+    });
   </script>
 </body>
 </html>
