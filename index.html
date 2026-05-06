@@ -152,6 +152,8 @@
     const BOARD_SIZE = 8;
     const MATCH_REMOVE_DELAY = 260;
     const FALL_ANIMATION_DURATION = 280;
+    const SWAP_ANIMATION_DURATION = 220;
+    const INVALID_SWAP_RETURN_DELAY = 260;
 
     // A small color palette representing different gem types.
     const COLORS = [
@@ -415,16 +417,15 @@
       });
     }
 
-    // Resolve matches until the board settles with no automatic chain reactions left.
-    async function resolveMatches() {
-      if (isBoardBusy) {
-        return;
-      }
+    function doesMatchIncludeSwappedTile(matches, firstTile, secondTile) {
+      return matches.has(firstTile) || matches.has(secondTile);
+    }
 
-      isBoardBusy = true;
+    // Resolve matches until the board settles with no automatic chain reactions left.
+    async function resolveMatches(startingMatches = findMatches()) {
       clearSelection();
 
-      let matches = findMatches();
+      let matches = startingMatches;
       while (matches.size > 0) {
         console.log('Match Found!');
         highlightMatches(matches);
@@ -434,14 +435,10 @@
         await playFallAnimations(collapseBoard());
         matches = findMatches();
       }
-
-      isBoardBusy = false;
     }
 
-    // Animate the two squares sliding toward each other, then swap their colors.
-    async function swapTileColors(firstTile, secondTile) {
-      isBoardBusy = true;
-
+    // Move the two selected squares toward each other and then swap their colors.
+    async function animateAndSwapTileColors(firstTile, secondTile) {
       const firstRect = firstTile.getBoundingClientRect();
       const secondRect = secondTile.getBoundingClientRect();
       const moveX = secondRect.left - firstRect.left;
@@ -452,7 +449,7 @@
       firstTile.style.transform = `translate(${moveX}px, ${moveY}px)`;
       secondTile.style.transform = `translate(${-moveX}px, ${-moveY}px)`;
 
-      await wait(220);
+      await wait(SWAP_ANIMATION_DURATION);
 
       const firstColor = getTileColor(firstTile);
       setTileColor(firstTile, getTileColor(secondTile));
@@ -461,8 +458,27 @@
       secondTile.style.transform = '';
       firstTile.classList.remove('is-swapping');
       secondTile.classList.remove('is-swapping');
-      isBoardBusy = false;
-      await resolveMatches();
+    }
+
+    // Only allow swaps that create a match. Invalid moves briefly pause, then return.
+    async function swapTileColors(firstTile, secondTile) {
+      isBoardBusy = true;
+      clearSelection();
+
+      try {
+        await animateAndSwapTileColors(firstTile, secondTile);
+
+        const matchesAfterSwap = findMatches();
+        if (!doesMatchIncludeSwappedTile(matchesAfterSwap, firstTile, secondTile)) {
+          await wait(INVALID_SWAP_RETURN_DELAY);
+          await animateAndSwapTileColors(firstTile, secondTile);
+          return;
+        }
+
+        await resolveMatches(matchesAfterSwap);
+      } finally {
+        isBoardBusy = false;
+      }
     }
 
     board.addEventListener('click', (event) => {
@@ -490,7 +506,13 @@
       swapTileColors(selectedTile, clickedTile);
     });
 
-    resolveMatches();
+    async function settleStartingBoard() {
+      isBoardBusy = true;
+      await resolveMatches();
+      isBoardBusy = false;
+    }
+
+    settleStartingBoard();
   </script>
 </body>
 </html>
