@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Match-3 Grid (8x8)</title>
+  <title>Antique Match-3 Grid (8x8)</title>
   <style>
     :root {
       --board-size: 8;
       --cell-size: 56px;
       --gap-size: 6px;
-      --board-bg: #1f2937;
-      --page-bg: #0f172a;
-      --text-color: #e5e7eb;
-      --highlight-color: #f8fafc;
+      --board-bg: #4b3525;
+      --page-bg: #211711;
+      --tile-bg: #f4dfb8;
+      --tile-border: #9c6f44;
+      --text-color: #fff7ed;
+      --highlight-color: #fde68a;
     }
 
     * {
@@ -86,10 +88,20 @@
     .tile {
       appearance: none;
       border-radius: 8px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--tile-border);
+      background: var(--tile-bg);
+      box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -4px 0 rgba(120, 74, 38, 0.22),
+        0 3px 8px rgba(0, 0, 0, 0.25);
       cursor: pointer;
       opacity: 1;
       padding: 0;
+      font-size: 2rem;
+      line-height: 1;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
       transition:
         transform 160ms ease,
         opacity 160ms ease,
@@ -111,6 +123,7 @@
 
     .tile.is-empty {
       border-color: transparent;
+      background: transparent;
       box-shadow: none;
       cursor: default;
       opacity: 0;
@@ -138,8 +151,8 @@
 </head>
 <body>
   <main class="wrapper">
-    <h1>Match-3 Demo Grid</h1>
-    <p class="instructions">Click one square, then click a neighboring square to swap colors.</p>
+    <h1>Antique Match-3</h1>
+    <p class="instructions">Click one antique tile, then click a neighboring tile to swap pieces.</p>
     <div class="scoreboard" aria-live="polite">
       <span class="score-label">Score</span>
       <span id="score" class="score-value">0</span>
@@ -155,14 +168,14 @@
     const SWAP_ANIMATION_DURATION = 220;
     const INVALID_SWAP_RETURN_DELAY = 260;
 
-    // A small color palette representing different gem types.
-    const COLORS = [
-      '#ef4444', // red
-      '#f59e0b', // amber
-      '#10b981', // green
-      '#3b82f6', // blue
-      '#8b5cf6', // purple
-      '#ec4899'  // pink
+    // Antique-themed tile set used for matching and refilling the board.
+    const ANTIQUE_TILES = [
+      { id: 'key', emoji: '🗝️', label: 'key' },
+      { id: 'lamp', emoji: '🪔', label: 'antique lamp' },
+      { id: 'clock', emoji: '⏰', label: 'old clock' },
+      { id: 'radio', emoji: '📻', label: 'old radio' },
+      { id: 'gem', emoji: '💎', label: 'gem' },
+      { id: 'vase', emoji: '🏺', label: 'vase' }
     ];
 
     const board = document.getElementById('board');
@@ -172,18 +185,17 @@
     let isBoardBusy = false;
     let score = 0;
 
-    // Build an 8x8 grid using random colors.
+    // Build an 8x8 grid using random antique tiles.
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const tile = document.createElement('button');
-        const color = getRandomStartingColor(row, col);
+        const tileType = getRandomStartingTileType(row, col);
 
         tile.className = 'tile';
         tile.type = 'button';
-        setTileColor(tile, color);
         tile.setAttribute('data-row', row);
         tile.setAttribute('data-col', col);
-        tile.setAttribute('aria-label', `Tile at row ${row + 1}, column ${col + 1}`);
+        setTileType(tile, tileType);
 
         board.appendChild(tile);
       }
@@ -197,25 +209,29 @@
       return cellSize + gapSize;
     }
 
-    function getRandomColor() {
-      return COLORS[Math.floor(Math.random() * COLORS.length)];
+    function getRandomTileType() {
+      return ANTIQUE_TILES[Math.floor(Math.random() * ANTIQUE_TILES.length)];
+    }
+
+    function getTileTypeById(tileTypeId) {
+      return ANTIQUE_TILES.find((tileType) => tileType.id === tileTypeId);
     }
 
     // Keep the opening board playable by avoiding automatic matches before the
-    // player makes a swap. Refills still use fully random colors so cascades can happen.
-    function getRandomStartingColor(row, col) {
-      const choices = [...COLORS].sort(() => Math.random() - 0.5);
+    // player makes a swap. Refills still use fully random tiles so cascades can happen.
+    function getRandomStartingTileType(row, col) {
+      const choices = [...ANTIQUE_TILES].sort(() => Math.random() - 0.5);
 
-      return choices.find((color) => !wouldCreateStartingMatch(row, col, color)) || getRandomColor();
+      return choices.find((tileType) => !wouldCreateStartingMatch(row, col, tileType.id)) || getRandomTileType();
     }
 
-    function wouldCreateStartingMatch(row, col, color) {
-      const leftOne = col >= 1 ? getTileColor(getTileAt(row, col - 1)) : '';
-      const leftTwo = col >= 2 ? getTileColor(getTileAt(row, col - 2)) : '';
-      const upOne = row >= 1 ? getTileColor(getTileAt(row - 1, col)) : '';
-      const upTwo = row >= 2 ? getTileColor(getTileAt(row - 2, col)) : '';
+    function wouldCreateStartingMatch(row, col, tileTypeId) {
+      const leftOne = col >= 1 ? getTileType(getTileAt(row, col - 1)) : '';
+      const leftTwo = col >= 2 ? getTileType(getTileAt(row, col - 2)) : '';
+      const upOne = row >= 1 ? getTileType(getTileAt(row - 1, col)) : '';
+      const upTwo = row >= 2 ? getTileType(getTileAt(row - 2, col)) : '';
 
-      return (leftOne === color && leftTwo === color) || (upOne === color && upTwo === color);
+      return (leftOne === tileTypeId && leftTwo === tileTypeId) || (upOne === tileTypeId && upTwo === tileTypeId);
     }
 
     function wait(milliseconds) {
@@ -235,7 +251,7 @@
       };
     }
 
-    // Match-3 swaps only move one square up, down, left, or right.
+    // Match-3 swaps only move one tile up, down, left, or right.
     function areTilesAdjacent(firstTile, secondTile) {
       const first = getTilePosition(firstTile);
       const second = getTilePosition(secondTile);
@@ -263,20 +279,22 @@
       return board.querySelector(`[data-row="${row}"][data-col="${col}"]`);
     }
 
-    function getTileColor(tile) {
-      return tile.dataset.color || '';
+    function getTileType(tile) {
+      return tile.dataset.tileType || '';
     }
 
-    function setTileColor(tile, color) {
-      tile.dataset.color = color;
-      tile.style.backgroundColor = color;
+    function setTileType(tile, tileType) {
+      tile.dataset.tileType = tileType.id;
+      tile.textContent = tileType.emoji;
+      tile.setAttribute('aria-label', `${tileType.label} tile at row ${Number(tile.dataset.row) + 1}, column ${Number(tile.dataset.col) + 1}`);
       tile.classList.remove('is-empty');
       tile.disabled = false;
     }
 
     function clearTile(tile) {
-      tile.dataset.color = '';
-      tile.style.backgroundColor = 'transparent';
+      tile.dataset.tileType = '';
+      tile.textContent = '';
+      tile.setAttribute('aria-label', `Empty tile at row ${Number(tile.dataset.row) + 1}, column ${Number(tile.dataset.col) + 1}`);
       tile.classList.add('is-empty');
       tile.disabled = true;
     }
@@ -285,7 +303,7 @@
       tiles.forEach((tile) => matches.add(tile));
     }
 
-    // Find every horizontal and vertical run of at least three matching colors.
+    // Find every horizontal and vertical run of at least three matching antique tiles.
     function findMatches() {
       const matches = new Set();
 
@@ -296,10 +314,10 @@
           const currentTile = getTileAt(row, col);
           const previousTile = currentRun[currentRun.length - 1];
 
-          if (getTileColor(currentTile) && getTileColor(currentTile) === getTileColor(previousTile)) {
+          if (getTileType(currentTile) && getTileType(currentTile) === getTileType(previousTile)) {
             currentRun.push(currentTile);
           } else {
-            if (currentRun.length >= 3 && getTileColor(previousTile)) {
+            if (currentRun.length >= 3 && getTileType(previousTile)) {
               markMatchingRun(matches, currentRun);
             }
 
@@ -308,7 +326,7 @@
         }
 
         const lastTile = currentRun[currentRun.length - 1];
-        if (currentRun.length >= 3 && getTileColor(lastTile)) {
+        if (currentRun.length >= 3 && getTileType(lastTile)) {
           markMatchingRun(matches, currentRun);
         }
       }
@@ -320,10 +338,10 @@
           const currentTile = getTileAt(row, col);
           const previousTile = currentRun[currentRun.length - 1];
 
-          if (getTileColor(currentTile) && getTileColor(currentTile) === getTileColor(previousTile)) {
+          if (getTileType(currentTile) && getTileType(currentTile) === getTileType(previousTile)) {
             currentRun.push(currentTile);
           } else {
-            if (currentRun.length >= 3 && getTileColor(previousTile)) {
+            if (currentRun.length >= 3 && getTileType(previousTile)) {
               markMatchingRun(matches, currentRun);
             }
 
@@ -332,7 +350,7 @@
         }
 
         const lastTile = currentRun[currentRun.length - 1];
-        if (currentRun.length >= 3 && getTileColor(lastTile)) {
+        if (currentRun.length >= 3 && getTileType(lastTile)) {
           markMatchingRun(matches, currentRun);
         }
       }
@@ -353,7 +371,7 @@
       });
     }
 
-    // Drop existing colors into empty spaces, then create new random colors above them.
+    // Drop existing tile types into empty spaces, then create new random tiles above them.
     function collapseBoard() {
       const fallAnimations = [];
 
@@ -362,10 +380,10 @@
 
         for (let row = BOARD_SIZE - 1; row >= 0; row--) {
           const tile = getTileAt(row, col);
-          const color = getTileColor(tile);
+          const tileTypeId = getTileType(tile);
 
-          if (color) {
-            fallingTiles.push({ color, fromRow: row });
+          if (tileTypeId) {
+            fallingTiles.push({ tileTypeId, fromRow: row });
           }
         }
 
@@ -375,11 +393,11 @@
 
           if (fallingTile) {
             const distance = row - fallingTile.fromRow;
-            setTileColor(tile, fallingTile.color);
+            setTileType(tile, getTileTypeById(fallingTile.tileTypeId));
             queueFallAnimation(tile, distance, fallAnimations);
           } else {
             const spawnDistance = row + 1;
-            setTileColor(tile, getRandomColor());
+            setTileType(tile, getRandomTileType());
             queueFallAnimation(tile, spawnDistance, fallAnimations);
           }
         }
@@ -437,8 +455,8 @@
       }
     }
 
-    // Move the two selected squares toward each other and then swap their colors.
-    async function animateAndSwapTileColors(firstTile, secondTile) {
+    // Move the two selected tiles toward each other and then swap their antique pieces.
+    async function animateAndSwapTileTypes(firstTile, secondTile) {
       const firstRect = firstTile.getBoundingClientRect();
       const secondRect = secondTile.getBoundingClientRect();
       const moveX = secondRect.left - firstRect.left;
@@ -451,9 +469,10 @@
 
       await wait(SWAP_ANIMATION_DURATION);
 
-      const firstColor = getTileColor(firstTile);
-      setTileColor(firstTile, getTileColor(secondTile));
-      setTileColor(secondTile, firstColor);
+      const firstTileType = getTileTypeById(getTileType(firstTile));
+      const secondTileType = getTileTypeById(getTileType(secondTile));
+      setTileType(firstTile, secondTileType);
+      setTileType(secondTile, firstTileType);
       firstTile.style.transform = '';
       secondTile.style.transform = '';
       firstTile.classList.remove('is-swapping');
@@ -461,17 +480,17 @@
     }
 
     // Only allow swaps that create a match. Invalid moves briefly pause, then return.
-    async function swapTileColors(firstTile, secondTile) {
+    async function swapTileTypes(firstTile, secondTile) {
       isBoardBusy = true;
       clearSelection();
 
       try {
-        await animateAndSwapTileColors(firstTile, secondTile);
+        await animateAndSwapTileTypes(firstTile, secondTile);
 
         const matchesAfterSwap = findMatches();
         if (!doesMatchIncludeSwappedTile(matchesAfterSwap, firstTile, secondTile)) {
           await wait(INVALID_SWAP_RETURN_DELAY);
-          await animateAndSwapTileColors(firstTile, secondTile);
+          await animateAndSwapTileTypes(firstTile, secondTile);
           return;
         }
 
@@ -503,7 +522,7 @@
         return;
       }
 
-      swapTileColors(selectedTile, clickedTile);
+      swapTileTypes(selectedTile, clickedTile);
     });
 
     async function settleStartingBoard() {
