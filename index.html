@@ -48,6 +48,30 @@
       font-size: 0.95rem;
     }
 
+    .scoreboard {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.7);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .score-label {
+      opacity: 0.82;
+    }
+
+    .score-value {
+      min-width: 4ch;
+      text-align: left;
+      color: #facc15;
+    }
+
     .board {
       display: grid;
       grid-template-columns: repeat(var(--board-size), var(--cell-size));
@@ -116,6 +140,10 @@
   <main class="wrapper">
     <h1>Match-3 Demo Grid</h1>
     <p class="instructions">Click one square, then click a neighboring square to swap colors.</p>
+    <div class="scoreboard" aria-live="polite">
+      <span class="score-label">Score</span>
+      <span id="score" class="score-value">0</span>
+    </div>
     <section id="board" class="board" aria-label="8 by 8 match-3 board"></section>
   </main>
 
@@ -136,15 +164,17 @@
     ];
 
     const board = document.getElementById('board');
+    const scoreDisplay = document.getElementById('score');
     const tileStep = getTileStepSize();
     let selectedTile = null;
     let isBoardBusy = false;
+    let score = 0;
 
     // Build an 8x8 grid using random colors.
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const tile = document.createElement('button');
-        const color = getRandomColor();
+        const color = getRandomStartingColor(row, col);
 
         tile.className = 'tile';
         tile.type = 'button';
@@ -169,8 +199,30 @@
       return COLORS[Math.floor(Math.random() * COLORS.length)];
     }
 
+    // Keep the opening board playable by avoiding automatic matches before the
+    // player makes a swap. Refills still use fully random colors so cascades can happen.
+    function getRandomStartingColor(row, col) {
+      const choices = [...COLORS].sort(() => Math.random() - 0.5);
+
+      return choices.find((color) => !wouldCreateStartingMatch(row, col, color)) || getRandomColor();
+    }
+
+    function wouldCreateStartingMatch(row, col, color) {
+      const leftOne = col >= 1 ? getTileColor(getTileAt(row, col - 1)) : '';
+      const leftTwo = col >= 2 ? getTileColor(getTileAt(row, col - 2)) : '';
+      const upOne = row >= 1 ? getTileColor(getTileAt(row - 1, col)) : '';
+      const upTwo = row >= 2 ? getTileColor(getTileAt(row - 2, col)) : '';
+
+      return (leftOne === color && leftTwo === color) || (upOne === color && upTwo === color);
+    }
+
     function wait(milliseconds) {
       return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+    }
+
+    function addScore(tilesRemoved) {
+      score += tilesRemoved * 10;
+      scoreDisplay.textContent = score;
     }
 
     // Read a tile's fixed board position from its data attributes.
@@ -377,6 +429,7 @@
         console.log('Match Found!');
         highlightMatches(matches);
         await wait(MATCH_REMOVE_DELAY);
+        addScore(matches.size);
         removeMatches(matches);
         await playFallAnimations(collapseBoard());
         matches = findMatches();
