@@ -64,8 +64,13 @@
       border-radius: 8px;
       border: 2px solid rgba(255, 255, 255, 0.2);
       cursor: pointer;
+      opacity: 1;
       padding: 0;
-      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      transition:
+        transform 160ms ease,
+        opacity 160ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease;
     }
 
     .tile.is-swapping {
@@ -74,7 +79,20 @@
       z-index: 1;
     }
 
-    .tile:hover {
+    .tile.is-falling {
+      pointer-events: none;
+      transition: transform 260ms ease-in, opacity 160ms ease;
+      z-index: 1;
+    }
+
+    .tile.is-empty {
+      border-color: transparent;
+      box-shadow: none;
+      cursor: default;
+      opacity: 0;
+    }
+
+    .tile:hover:not(.is-empty) {
       transform: scale(1.03);
     }
 
@@ -82,6 +100,11 @@
     .tile.matched {
       border-color: var(--highlight-color);
       box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.3);
+    }
+
+    .tile.matched {
+      opacity: 0.2;
+      transform: scale(0.78);
     }
 
     .tile.selected {
@@ -99,6 +122,8 @@
   <script>
     // Board settings.
     const BOARD_SIZE = 8;
+    const MATCH_REMOVE_DELAY = 260;
+    const FALL_ANIMATION_DURATION = 280;
 
     // A small color palette representing different gem types.
     const COLORS = [
@@ -111,25 +136,41 @@
     ];
 
     const board = document.getElementById('board');
+    const tileStep = getTileStepSize();
     let selectedTile = null;
-    let isAnimatingSwap = false;
-    let lastMatchedTileKey = '';
+    let isBoardBusy = false;
 
     // Build an 8x8 grid using random colors.
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const tile = document.createElement('button');
-        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        const color = getRandomColor();
 
         tile.className = 'tile';
         tile.type = 'button';
-        tile.style.backgroundColor = color;
+        setTileColor(tile, color);
         tile.setAttribute('data-row', row);
         tile.setAttribute('data-col', col);
         tile.setAttribute('aria-label', `Tile at row ${row + 1}, column ${col + 1}`);
 
         board.appendChild(tile);
       }
+    }
+
+    function getTileStepSize() {
+      const styles = getComputedStyle(document.documentElement);
+      const cellSize = Number.parseFloat(styles.getPropertyValue('--cell-size'));
+      const gapSize = Number.parseFloat(styles.getPropertyValue('--gap-size'));
+
+      return cellSize + gapSize;
+    }
+
+    function getRandomColor() {
+      return COLORS[Math.floor(Math.random() * COLORS.length)];
+    }
+
+    function wait(milliseconds) {
+      return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     }
 
     // Read a tile's fixed board position from its data attributes.
@@ -169,7 +210,21 @@
     }
 
     function getTileColor(tile) {
-      return tile.style.backgroundColor;
+      return tile.dataset.color || '';
+    }
+
+    function setTileColor(tile, color) {
+      tile.dataset.color = color;
+      tile.style.backgroundColor = color;
+      tile.classList.remove('is-empty');
+      tile.disabled = false;
+    }
+
+    function clearTile(tile) {
+      tile.dataset.color = '';
+      tile.style.backgroundColor = 'transparent';
+      tile.classList.add('is-empty');
+      tile.disabled = true;
     }
 
     function markMatchingRun(matches, tiles) {
@@ -187,10 +242,10 @@
           const currentTile = getTileAt(row, col);
           const previousTile = currentRun[currentRun.length - 1];
 
-          if (getTileColor(currentTile) === getTileColor(previousTile)) {
+          if (getTileColor(currentTile) && getTileColor(currentTile) === getTileColor(previousTile)) {
             currentRun.push(currentTile);
           } else {
-            if (currentRun.length >= 3) {
+            if (currentRun.length >= 3 && getTileColor(previousTile)) {
               markMatchingRun(matches, currentRun);
             }
 
@@ -198,7 +253,8 @@
           }
         }
 
-        if (currentRun.length >= 3) {
+        const lastTile = currentRun[currentRun.length - 1];
+        if (currentRun.length >= 3 && getTileColor(lastTile)) {
           markMatchingRun(matches, currentRun);
         }
       }
@@ -210,10 +266,10 @@
           const currentTile = getTileAt(row, col);
           const previousTile = currentRun[currentRun.length - 1];
 
-          if (getTileColor(currentTile) === getTileColor(previousTile)) {
+          if (getTileColor(currentTile) && getTileColor(currentTile) === getTileColor(previousTile)) {
             currentRun.push(currentTile);
           } else {
-            if (currentRun.length >= 3) {
+            if (currentRun.length >= 3 && getTileColor(previousTile)) {
               markMatchingRun(matches, currentRun);
             }
 
@@ -221,7 +277,8 @@
           }
         }
 
-        if (currentRun.length >= 3) {
+        const lastTile = currentRun[currentRun.length - 1];
+        if (currentRun.length >= 3 && getTileColor(lastTile)) {
           markMatchingRun(matches, currentRun);
         }
       }
@@ -229,39 +286,108 @@
       return matches;
     }
 
-    function getMatchedTileKey(matches) {
-      return [...matches]
-        .map((tile) => `${tile.dataset.row},${tile.dataset.col}`)
-        .sort()
-        .join('|');
-    }
-
-    function clearMatchHighlights() {
-      board.querySelectorAll('.tile.matched').forEach((tile) => {
-        tile.classList.remove('matched');
-      });
-    }
-
-    // Continuously refresh match highlighting so swaps and random starts are detected.
-    function checkForMatches() {
-      const matches = findMatches();
-      const matchedTileKey = getMatchedTileKey(matches);
-
-      clearMatchHighlights();
+    function highlightMatches(matches) {
       matches.forEach((tile) => {
         tile.classList.add('matched');
       });
+    }
 
-      if (matches.size > 0 && matchedTileKey !== lastMatchedTileKey) {
-        console.log('Match Found!');
+    function removeMatches(matches) {
+      matches.forEach((tile) => {
+        tile.classList.remove('matched', 'selected');
+        clearTile(tile);
+      });
+    }
+
+    // Drop existing colors into empty spaces, then create new random colors above them.
+    function collapseBoard() {
+      const fallAnimations = [];
+
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const fallingTiles = [];
+
+        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
+          const tile = getTileAt(row, col);
+          const color = getTileColor(tile);
+
+          if (color) {
+            fallingTiles.push({ color, fromRow: row });
+          }
+        }
+
+        for (let row = BOARD_SIZE - 1; row >= 0; row--) {
+          const tile = getTileAt(row, col);
+          const fallingTile = fallingTiles.shift();
+
+          if (fallingTile) {
+            const distance = row - fallingTile.fromRow;
+            setTileColor(tile, fallingTile.color);
+            queueFallAnimation(tile, distance, fallAnimations);
+          } else {
+            const spawnDistance = row + 1;
+            setTileColor(tile, getRandomColor());
+            queueFallAnimation(tile, spawnDistance, fallAnimations);
+          }
+        }
       }
 
-      lastMatchedTileKey = matchedTileKey;
+      return fallAnimations;
+    }
+
+    function queueFallAnimation(tile, distance, fallAnimations) {
+      if (distance <= 0) {
+        tile.style.transform = '';
+        tile.classList.remove('is-falling');
+        return;
+      }
+
+      tile.classList.add('is-falling');
+      tile.style.transform = `translateY(${-distance * tileStep}px)`;
+      fallAnimations.push(tile);
+    }
+
+    async function playFallAnimations(fallAnimations) {
+      if (!fallAnimations.length) {
+        return;
+      }
+
+      // Force the browser to apply the starting transform before animating to rest.
+      board.offsetHeight;
+      fallAnimations.forEach((tile) => {
+        tile.style.transform = '';
+      });
+
+      await wait(FALL_ANIMATION_DURATION);
+      fallAnimations.forEach((tile) => {
+        tile.classList.remove('is-falling');
+      });
+    }
+
+    // Resolve matches until the board settles with no automatic chain reactions left.
+    async function resolveMatches() {
+      if (isBoardBusy) {
+        return;
+      }
+
+      isBoardBusy = true;
+      clearSelection();
+
+      let matches = findMatches();
+      while (matches.size > 0) {
+        console.log('Match Found!');
+        highlightMatches(matches);
+        await wait(MATCH_REMOVE_DELAY);
+        removeMatches(matches);
+        await playFallAnimations(collapseBoard());
+        matches = findMatches();
+      }
+
+      isBoardBusy = false;
     }
 
     // Animate the two squares sliding toward each other, then swap their colors.
-    function swapTileColors(firstTile, secondTile) {
-      isAnimatingSwap = true;
+    async function swapTileColors(firstTile, secondTile) {
+      isBoardBusy = true;
 
       const firstRect = firstTile.getBoundingClientRect();
       const secondRect = secondTile.getBoundingClientRect();
@@ -273,25 +399,23 @@
       firstTile.style.transform = `translate(${moveX}px, ${moveY}px)`;
       secondTile.style.transform = `translate(${-moveX}px, ${-moveY}px)`;
 
-      window.setTimeout(() => {
-        const firstColor = firstTile.style.backgroundColor;
+      await wait(220);
 
-        firstTile.style.backgroundColor = secondTile.style.backgroundColor;
-        secondTile.style.backgroundColor = firstColor;
-        firstTile.style.transform = '';
-        secondTile.style.transform = '';
-        firstTile.classList.remove('is-swapping');
-        secondTile.classList.remove('is-swapping');
-        clearSelection();
-        isAnimatingSwap = false;
-        checkForMatches();
-      }, 220);
+      const firstColor = getTileColor(firstTile);
+      setTileColor(firstTile, getTileColor(secondTile));
+      setTileColor(secondTile, firstColor);
+      firstTile.style.transform = '';
+      secondTile.style.transform = '';
+      firstTile.classList.remove('is-swapping');
+      secondTile.classList.remove('is-swapping');
+      isBoardBusy = false;
+      await resolveMatches();
     }
 
     board.addEventListener('click', (event) => {
       const clickedTile = event.target.closest('.tile');
 
-      if (!clickedTile || !board.contains(clickedTile) || isAnimatingSwap) {
+      if (!clickedTile || !board.contains(clickedTile) || isBoardBusy) {
         return;
       }
 
@@ -313,8 +437,7 @@
       swapTileColors(selectedTile, clickedTile);
     });
 
-    checkForMatches();
-    window.setInterval(checkForMatches, 500);
+    resolveMatches();
   </script>
 </body>
 </html>
