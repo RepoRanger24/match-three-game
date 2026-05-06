@@ -78,10 +78,14 @@
       transform: scale(1.03);
     }
 
-    .tile.selected {
+    .tile.selected,
+    .tile.matched {
       border-color: var(--highlight-color);
-      transform: scale(1.08);
       box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.3);
+    }
+
+    .tile.selected {
+      transform: scale(1.08);
     }
   </style>
 </head>
@@ -109,6 +113,7 @@
     const board = document.getElementById('board');
     let selectedTile = null;
     let isAnimatingSwap = false;
+    let lastMatchedTileKey = '';
 
     // Build an 8x8 grid using random colors.
     for (let row = 0; row < BOARD_SIZE; row++) {
@@ -159,6 +164,101 @@
       selectedTile = null;
     }
 
+    function getTileAt(row, col) {
+      return board.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function getTileColor(tile) {
+      return tile.style.backgroundColor;
+    }
+
+    function markMatchingRun(matches, tiles) {
+      tiles.forEach((tile) => matches.add(tile));
+    }
+
+    // Find every horizontal and vertical run of at least three matching colors.
+    function findMatches() {
+      const matches = new Set();
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        let currentRun = [getTileAt(row, 0)];
+
+        for (let col = 1; col < BOARD_SIZE; col++) {
+          const currentTile = getTileAt(row, col);
+          const previousTile = currentRun[currentRun.length - 1];
+
+          if (getTileColor(currentTile) === getTileColor(previousTile)) {
+            currentRun.push(currentTile);
+          } else {
+            if (currentRun.length >= 3) {
+              markMatchingRun(matches, currentRun);
+            }
+
+            currentRun = [currentTile];
+          }
+        }
+
+        if (currentRun.length >= 3) {
+          markMatchingRun(matches, currentRun);
+        }
+      }
+
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        let currentRun = [getTileAt(0, col)];
+
+        for (let row = 1; row < BOARD_SIZE; row++) {
+          const currentTile = getTileAt(row, col);
+          const previousTile = currentRun[currentRun.length - 1];
+
+          if (getTileColor(currentTile) === getTileColor(previousTile)) {
+            currentRun.push(currentTile);
+          } else {
+            if (currentRun.length >= 3) {
+              markMatchingRun(matches, currentRun);
+            }
+
+            currentRun = [currentTile];
+          }
+        }
+
+        if (currentRun.length >= 3) {
+          markMatchingRun(matches, currentRun);
+        }
+      }
+
+      return matches;
+    }
+
+    function getMatchedTileKey(matches) {
+      return [...matches]
+        .map((tile) => `${tile.dataset.row},${tile.dataset.col}`)
+        .sort()
+        .join('|');
+    }
+
+    function clearMatchHighlights() {
+      board.querySelectorAll('.tile.matched').forEach((tile) => {
+        tile.classList.remove('matched');
+      });
+    }
+
+    // Continuously refresh match highlighting so swaps and random starts are detected.
+    function checkForMatches() {
+      const matches = findMatches();
+      const matchedTileKey = getMatchedTileKey(matches);
+
+      clearMatchHighlights();
+      matches.forEach((tile) => {
+        tile.classList.add('matched');
+      });
+
+      if (matches.size > 0 && matchedTileKey !== lastMatchedTileKey) {
+        console.log('Match Found!');
+      }
+
+      lastMatchedTileKey = matchedTileKey;
+    }
+
     // Animate the two squares sliding toward each other, then swap their colors.
     function swapTileColors(firstTile, secondTile) {
       isAnimatingSwap = true;
@@ -184,6 +284,7 @@
         secondTile.classList.remove('is-swapping');
         clearSelection();
         isAnimatingSwap = false;
+        checkForMatches();
       }, 220);
     }
 
@@ -211,6 +312,9 @@
 
       swapTileColors(selectedTile, clickedTile);
     });
+
+    checkForMatches();
+    window.setInterval(checkForMatches, 500);
   </script>
 </body>
 </html>
