@@ -44,6 +44,10 @@
       opacity: 0.85;
     }
 
+    .instructions {
+      font-size: 0.95rem;
+    }
+
     .board {
       display: grid;
       grid-template-columns: repeat(var(--board-size), var(--cell-size));
@@ -56,10 +60,18 @@
     }
 
     .tile {
+      appearance: none;
       border-radius: 8px;
       border: 2px solid rgba(255, 255, 255, 0.2);
       cursor: pointer;
+      padding: 0;
       transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .tile.is-swapping {
+      pointer-events: none;
+      transition: transform 220ms ease-in-out, border-color 120ms ease, box-shadow 120ms ease;
+      z-index: 1;
     }
 
     .tile:hover {
@@ -76,7 +88,7 @@
 <body>
   <main class="wrapper">
     <h1>Match-3 Demo Grid</h1>
-    <p>Simple 8x8 board with colored squares.</p>
+    <p class="instructions">Click one square, then click a neighboring square to swap colors.</p>
     <section id="board" class="board" aria-label="8 by 8 match-3 board"></section>
   </main>
 
@@ -96,36 +108,108 @@
 
     const board = document.getElementById('board');
     let selectedTile = null;
+    let isAnimatingSwap = false;
 
     // Build an 8x8 grid using random colors.
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
-        const tile = document.createElement('div');
+        const tile = document.createElement('button');
         const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
         tile.className = 'tile';
+        tile.type = 'button';
         tile.style.backgroundColor = color;
         tile.setAttribute('data-row', row);
         tile.setAttribute('data-col', col);
+        tile.setAttribute('aria-label', `Tile at row ${row + 1}, column ${col + 1}`);
 
         board.appendChild(tile);
       }
     }
 
-    // Handle tile selection so only one tile is highlighted at a time.
-    board.addEventListener('click', (event) => {
-      const clickedTile = event.target.closest('.tile');
+    // Read a tile's fixed board position from its data attributes.
+    function getTilePosition(tile) {
+      return {
+        row: Number(tile.dataset.row),
+        col: Number(tile.dataset.col)
+      };
+    }
 
-      if (!clickedTile || !board.contains(clickedTile)) {
-        return;
-      }
+    // Match-3 swaps only move one square up, down, left, or right.
+    function areTilesAdjacent(firstTile, secondTile) {
+      const first = getTilePosition(firstTile);
+      const second = getTilePosition(secondTile);
+      const rowDistance = Math.abs(first.row - second.row);
+      const colDistance = Math.abs(first.col - second.col);
 
+      return rowDistance + colDistance === 1;
+    }
+
+    function selectTile(tile) {
+      clearSelection();
+      tile.classList.add('selected');
+      selectedTile = tile;
+    }
+
+    function clearSelection() {
       if (selectedTile) {
         selectedTile.classList.remove('selected');
       }
 
-      clickedTile.classList.add('selected');
-      selectedTile = clickedTile;
+      selectedTile = null;
+    }
+
+    // Animate the two squares sliding toward each other, then swap their colors.
+    function swapTileColors(firstTile, secondTile) {
+      isAnimatingSwap = true;
+
+      const firstRect = firstTile.getBoundingClientRect();
+      const secondRect = secondTile.getBoundingClientRect();
+      const moveX = secondRect.left - firstRect.left;
+      const moveY = secondRect.top - firstRect.top;
+
+      firstTile.classList.add('is-swapping');
+      secondTile.classList.add('is-swapping');
+      firstTile.style.transform = `translate(${moveX}px, ${moveY}px)`;
+      secondTile.style.transform = `translate(${-moveX}px, ${-moveY}px)`;
+
+      window.setTimeout(() => {
+        const firstColor = firstTile.style.backgroundColor;
+
+        firstTile.style.backgroundColor = secondTile.style.backgroundColor;
+        secondTile.style.backgroundColor = firstColor;
+        firstTile.style.transform = '';
+        secondTile.style.transform = '';
+        firstTile.classList.remove('is-swapping');
+        secondTile.classList.remove('is-swapping');
+        clearSelection();
+        isAnimatingSwap = false;
+      }, 220);
+    }
+
+    board.addEventListener('click', (event) => {
+      const clickedTile = event.target.closest('.tile');
+
+      if (!clickedTile || !board.contains(clickedTile) || isAnimatingSwap) {
+        return;
+      }
+
+      if (!selectedTile) {
+        selectTile(clickedTile);
+        return;
+      }
+
+      if (clickedTile === selectedTile) {
+        clearSelection();
+        return;
+      }
+
+      if (!areTilesAdjacent(selectedTile, clickedTile)) {
+        clearSelection();
+        return;
+      }
+
+      swapTileColors(selectedTile, clickedTile);
     });
   </script>
 </body>
